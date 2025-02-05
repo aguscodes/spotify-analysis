@@ -33,7 +33,7 @@ Analizar qué variables tienen mayor impacto en la popularidad de una canción y
 ## 📂 Archivos
 - `canciones_populares.ipynb`: Código del análisis.
 - https://www.kaggle.com/datasets/joebeachcapital/top-10000-spotify-songs-1960-now/data
-- `presentación.pdf`: Resumen visual del análisis (opcional).
+- `spoti_pptx`: Resumen visual del análisis.
 
 ## 🚀 Cómo usar este repositorio
 1. Clonar el repositorio:  
