@@ -31,13 +31,7 @@ Analizar qué variables tienen mayor impacto en la popularidad de una canción y
 - R (tidyr,
 
 ## 📂 Archivos
-- `canciones_populares.ipynb`: Código del análisis.
+- `presentacion final.Rmd`: Código del análisis.
 - https://www.kaggle.com/datasets/joebeachcapital/top-10000-spotify-songs-1960-now/data
 - `spoti_pptx`: Resumen visual del análisis.
 
-## 🚀 Cómo usar este repositorio
-1. Clonar el repositorio:  
-   ```bash
-   git clone https://github.com/tu_usuario/canciones-populares.git
-   ```
-2. Abrir el Jupyter Notebook y ejecutar las celdas.
