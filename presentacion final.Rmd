@@ -1,0 +1,813 @@
+---
+title: "Seguimieto del trabajo final "
+author: "Agustin Miller, Agustina Sosa, Brenda Conradi Tauz, Julian Marcelo Scarpin"
+date: "21/10/2023"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    collapsed: true
+    smooth_scroll: true
+    theme: journal
+    highlight: kate
+    df_print: paged
+    code_folding: show
+---
+
+-Librerias:
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(modelr)
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+library(purrr)
+library(broom)
+
+```
+
+# Introducción: contexto y pregunta
+
+¿Que es lo que hace popular a una canción? Lo que podemos hacer al analizar las caracteristicas de las canciones populares es, por ejemplo, en una discografica poder hacer recomendaciones sobre como debe ser una canción para que pueda ser "Popular".
+
+# Presentación datasets
+
+## Data Frame Top 10000 Songs on Spotify 1960-Now
+
+Fuente: <https://www.kaggle.com/datasets/joebeachcapital/top-10000-spotify-songs-1960-now/data> Informacion extraida de Spotify's API
+
+```{r}
+df_10k <- read_csv("top_10000_1960-now.csv")
+```
+
+
+### Limpieza Top 10000 Songs on Spotify 1960-Now
+
+Elimino generos album y luego elimino los datos con NA´s de las canciones que no tienen el genero 
+```{r}
+df_10k<- df_10k%>%
+  select(-`Album Genres`)
+```
+
+```{r}
+df_10k <- df_10k%>%
+  drop_na(`Artist Genres`)
+```
+
+```{r}
+df_10k2<-df_10k %>% 
+  rename(Title=`Track Name`)%>%
+  mutate(Date = as.Date(`Album Release Date`, format = "%Y-%m-%d"))%>%
+  mutate(Title=tolower(Title))
+```
+
+```{r}
+#Creo la variable solo de los años de lanzamiento y la hago numerica 
+df_10k2$year <- ifelse(nchar(df_10k2$`Album Release Date`) == 4, df_10k2$`Album Release Date`, year(ymd(df_10k2$`Album Release Date`)))
+```
+
+```{r}
+df_10k2 <- df_10k2%>%
+  mutate(year=as.numeric(year))
+```
+
+Vemos la distribucion de las canciones a lo largo de loa años
+
+```{r}
+df_10k2%>%
+  group_by(year)%>%
+  summarise(n())
+```
+
+```{r}
+df_10k2%>%
+  ggplot()+
+  geom_bar(aes(x=year))
+```
+
+Elimino los datps de menos de 1960 y los mayores a 2020
+```{r}
+df_10k2 <- df_10k2%>%
+  filter(year<2021)
+```
+
+#### separo por genero 
+```{r}
+#separo las caniones por genero 
+df_10k2_generos <- df_10k2 %>%
+  rename(Genre=`Artist Genres`)%>%
+  separate_rows(Genre, sep = ",")
+```
+
+```{r}
+df_10k2_generos <- df_10k2_generos %>%
+    select(-`Track URI`, -`Artist URI(s)`, -`Album Artist URI(s)`, -`Album URI`, -`Album Image URL`, -`Disc Number`, -`Track Number`, -`Track Preview URL`, -ISRC, -`Added At`, -Copyrights)%>%
+  mutate(duracion_min = `Track Duration (ms)` / 60000)%>%
+  rename(duracion_ms = `Track Duration (ms)`)%>%
+  drop_na(duracion_ms)%>%
+  unique()
+```
+
+```{r}
+#unifico los distintos tipos de generos en uno y lo guardo en un nuevo dataset 
+
+df_10k2_generos_separados <- df_10k2_generos %>%
+  mutate(Genre = case_when(
+    grepl("pop", Genre, ignore.case = TRUE) ~ "Pop",
+    grepl("hip hop|rap|trap|urban|drill|rkt|grime|hop", Genre, ignore.case = TRUE) ~ "Hip Hop",
+    grepl("reggaeton|dembow", Genre, ignore.case = TRUE) ~ "Reggaeton",
+    grepl("house|techno|edm|brostep|electro|complextro|big room", Genre, ignore.case = TRUE) ~ "EMC",
+    grepl("rock|metal|punk|hardcore|psych", Genre, ignore.case = TRUE) ~ "Rock",
+    grepl("r&b", Genre, ignore.case = TRUE) ~ "r&b",
+    grepl("funk|afro|jazz|lounge|soul", Genre, ignore.case = TRUE) ~ "Afro-Funk",
+    grepl("latin|perreo|tropical|bachata|salsa|cumbia|forro|mexico|vallenato", Genre, ignore.case = TRUE) ~ "Latino", 
+    grepl("dance|moombahton", Genre, ignore.case = TRUE) ~ "Baile",
+    grepl("country|ranchera|corrid|nort", Genre, ignore.case = TRUE) ~ "Country",
+    grepl("reggae", Genre, ignore.case = TRUE) ~ "Reggae",
+    grepl("disco", Genre, ignore.case = TRUE) ~ "Disco",
+    TRUE ~ NA
+  )) %>%
+  filter(!is.na(Genre))%>%
+  unique()
+```
+
+```{r, message=FALSE}
+#creo un dataset con solo las canciones junto a sus generos y artistas
+solo_canciones_10k <- df_10k2_generos_separados%>%
+  group_by(Title, Genre)%>%
+  summarise(`Artist Name(s)`)%>%
+  unique()
+```
+
+```{r}
+#Bar plot de la cantidad de cancions por genero  
+solo_canciones_10k %>%
+  ggplot() +
+  geom_bar(aes(x = fct_infreq(Genre), fill = Genre))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+
+  labs(title = "Cantidad de canciones por genero en el Top 10000 ",  x = "Genero", y = "Cantidad")
+```
+#### Divido por decadas 
+```{r}
+df_10k2_generos_separados <- df_10k2_generos_separados %>%
+  mutate(Decada = cut(year, breaks = seq(1950, 2030, by = 10), labels = paste0(seq(1950, 2020, by = 10), "-", seq(1959, 2029, by = 10))))%>%
+  mutate(factor_year=as.factor(year))
+```
+
+
+
+#### Me quedo con los 5 generos mas escuchados
+
+```{r}
+cinco_generos <- df_10k2_generos_separados %>%
+  filter(Genre %in% c("Pop", "Rock", "Hip Hop", "EMC", "Afro-Funk"))
+```
+
+```{r}
+df_decada50 <- cinco_generos%>%
+  filter(Decada=="1950-1959")
+
+df_decada60<- cinco_generos%>%
+  filter(Decada=="1960-1969")
+
+df_decada70<- cinco_generos%>%
+  filter(Decada=="1970-1979")
+
+df_decada80<- cinco_generos%>%
+  filter(Decada=="1980-1989")
+
+df_decada90<- cinco_generos%>%
+  filter(Decada=="1990-1999")
+
+df_decada00<- cinco_generos%>%
+  filter(Decada=="2000-2009")
+
+df_decada10<- cinco_generos%>%
+  filter(Decada=="2010-2019")
+
+```
+
+```{r}
+cinco_generos %>%
+  ggplot() +
+  geom_boxplot(aes(x= Genre, y =Popularity, colour=Genre))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+
+  labs(title = "Distribucion de la popularidad de las canciones ",  x = "Genero", y = "Popularidad")
+```
+
+```{r}
+df_decada60 %>%
+  ggplot() +
+  geom_boxplot(aes(x= Genre, y =Popularity ))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  labs(title = "Cantidad de canciones por genero en decada 90 ",  x = "Genero", y = "Cantidad")
+
+df_decada10 %>%
+  ggplot() +
+  geom_boxplot(aes(x= Genre, y =Popularity ))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  labs(title = "Cantidad de canciones por genero en decada 90 ",  x = "Genero", y = "Cantidad")
+  
+df_decada90 %>%
+  ggplot() +
+  geom_boxplot(aes(x= Genre, y =Popularity ))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  labs(title = "Cantidad de canciones por genero en decada 90 ",  x = "Genero", y = "Cantidad")
+```
+
+```{r}
+cinco_generos %>%
+  ggplot() +
+  geom_bar(aes(x = fct_infreq(Genre), fill = Genre)) +
+  facet_wrap(~Decada, scales = "free") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  labs(title = "Cantidad de canciones por género en diferentes décadas",  x = "Género", y = "Cantidad")
+```
+
+```{r}
+cinco_generos %>%
+  ggplot() +
+  geom_bar(aes(x = fct_infreq(Genre), fill = Genre), position = "dodge", width = 0.7) +
+  facet_wrap(~Decada, scales = "free") +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+        axis.title.x = element_blank()) +
+  labs(title = "Canciones por género en diferentes décadas",  
+       y = "Cantidad") 
+```
+
+
+#### Popularidad
+
+```{r}
+ggplot(data = df_10k2_generos_separados, aes(x = Popularity)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Popularidad")
+  
+```
+
+```{r}
+df_10k2_generos_separados <- df_10k2_generos_separados%>%
+  filter(Popularity!=0)
+```
+
+```{r}
+ggplot(data = df_10k2_generos_separados, aes(x = Popularity)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Popularidad")  # Agregar la densidad como una línea
+```
+
+###### Corte popularidad 
+```{r}
+df_10k_corte70 <- df_10k2_generos_separados %>%
+  mutate(Popularidad = ifelse(Popularity >= 50, "Popular", "No Popular")) %>%
+  mutate(Popularidad = as.factor(Popularidad))
+```
+
+# Propuesta 1 
+
+## Divido por genero
+
+```{r}
+df_pop <- df_10k2_generos_separados%>%
+  filter(Genre=='Pop')
+
+df_Rock <- df_10k2_generos_separados%>%
+  filter(Genre=='Rock')
+
+df_Hip_Hop <- df_10k2_generos_separados%>%
+  filter(Genre=='Hip Hop')
+
+df_EMC <- df_10k2_generos_separados%>%
+  filter(Genre=='EMC')
+
+df_Afro_Funk <- df_10k2_generos_separados%>%
+  filter(Genre=='Afro-Funk')
+```
+
+```{r}
+df_pop %>%
+  ggplot() +
+  geom_bar(aes(x =(Decada), fill = Decada))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+df_Rock %>%
+  ggplot() +
+  geom_bar(aes(x =(Decada), fill = Decada))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+df_EMC %>%
+  ggplot() +
+  geom_bar(aes(x =(Decada), fill = Decada))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+df_Hip_Hop %>%
+  ggplot() +
+  geom_bar(aes(x =(Decada), fill = Decada))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+df_Afro_Funk %>%
+  ggplot() +
+  geom_bar(aes(x =(Decada), fill = Decada))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+```{r}
+cinco_generos %>%
+  ggplot() +
+  geom_boxplot(aes(x = fct_infreq(Genre), y = Popularity, fill = Genre), position = "dodge", width = 0.7) +
+  facet_wrap(~Decada, scales = "free") +
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank()) +
+  labs(title = "Comparación de la popularidad  por género en diferentes décadas",  
+       x = "Género", y = "Popularidad", fill="Género") 
+```
+
+```{r}
+cinco_generos %>%
+  ggplot() +
+  geom_boxplot(aes(x = reorder(fct_infreq(Genre), -Popularity, median), y = Popularity, fill = Genre), position = "dodge", width = 0.7) +
+  facet_wrap(~Decada, scales = "free") +
+  labs(title = "Comparación de Popularity y Danceability por género en diferentes décadas",  
+       x = "Bailabilidad", y = "Popularity") +
+  coord_flip()
+```
+
+
+## Boxplot 
+
+```{r}
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(y=Danceability, x=Decada))+
+  labs(title = "Bailabilidad por decada",  
+       x = "Decada", y = "Bailabilidad")
+
+ggplot(df_decada90)+
+  geom_boxplot(aes(y=Danceability, x=Genre, colour=Genre))+
+  labs(title = "Bailabilidad en los 90´s",  
+       x = "Genros", y = "Bailabilidad")
+  
+```
+
+
+```{r}
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(y=Energy, x=Decada))+
+  labs(title = "Carcteristicas sonoras en el tiempo",  
+       x = "Decada", y = "Energia")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(y=Acousticness, x=Decada))+
+  labs(title = "Carcteristicas sonoras en el tiempo",  
+       y = "Acousticness", x = "Decada")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(y=Danceability, x=Decada))+
+  labs(title = "Carcteristicas sonoras en el tiempo",  
+       y = "Bailabilidad", x = "Decada")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(y=Valence, x=Decada))+
+  labs(title = "Carcteristicas sonoras en el tiempo",  
+       y = "Valence", x = "Decada")
+```
+
+## Popularity vs 
+
+
+```{r}
+ggplot(data = df_10k2_generos_separados, aes(x = Danceability)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Bailabilidad")  # Agregar la densidad como una línea
+
+ggplot(data = df_10k2_generos_separados, aes(x = Energy)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Energia")  # Agregar la densidad como una línea
+
+ggplot(data = df_10k2_generos_separados, aes(x = Loudness)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Loudness")  # Agregar la densidad como una línea
+
+ggplot(data = df_10k2_generos_separados, aes(x = Speechiness)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Speechiness")
+
+ggplot(data = df_10k2_generos_separados, aes(x = Instrumentalness)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Instrumentalness")+
+  ylim(0, 50)# Agregar la densidad como una línea
+
+ggplot(data = df_10k2_generos_separados, aes(x = Acousticness)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Acousticness")  # Agregar la densidad como una línea
+
+ggplot(data = df_10k2_generos_separados, aes(x = Valence)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Valence")  # Agregar la densidad como una línea
+```
+
+
+```{r}
+ggplot(data = df_pop, aes(x = Danceability)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Bailabilidad")  # Agregar la densidad como una línea
+
+ggplot(data = df_Rock, aes(x = Danceability)) +
+  geom_histogram(aes(y = ..density..), position = "identity", bins = 30, alpha = 0.5) +
+  stat_density(geom = "line", size = 1)+
+  ylab("Distrubucion de Bailabilidad")  # Agregar la densidad como una línea
+```
+
+```{r}
+df_10k2_generos_separados$nivel_bailabilidad <- cut(df_10k2_generos_separados$Danceability,
+                                                    breaks = c(0, 0.50, 0.75, 1.00),
+                                                    labels = c("Poco bailable", "Bailable", "Muy bailable"))
+
+cat("Número de NA en danceability:", sum(is.na(df_10k2_generos_separados$Danceability)), "\n")
+```
+
+```{r}
+df_10k2_generos_separados$nivel_positividad <- cut(df_10k2_generos_separados$Valence,
+                                                    breaks = c(0, 0.50, 0.75, 1.00),
+                                                    labels = c("Poco bailable", "Bailable", "Muy bailable"))
+
+cat("Número de NA en danceability:", sum(is.na(df_10k2_generos_separados$Valence)), "\n")
+```
+
+```{r}
+df_10k2_generos_separados$nivel_energia <- cut(df_10k2_generos_separados$Energy,
+                                                    breaks = c(0, 0.50, 0.75, 1.00),
+                                                    labels = c("Poco energetica", "energetica", "Muy energetica"))
+
+cat("Número de NA en danceability:", sum(is.na(df_10k2_generos_separados$Energy)), "\n")
+```
+
+
+
+```{r}
+df_10k2_generos_separados$nivel_Loudness <- cut(df_10k2_generos_separados$Loudness,
+                                                    breaks = c(-25.00, -10.00, 0.00),
+                                                    labels = c("Poco Ruidosa", "Ruidosa"))
+
+cat("Número de NA en danceability:", sum(is.na(df_10k2_generos_separados$Loudness)), "\n")
+```
+
+```{r}
+df_10k2_generos_separados$acusticidad <- cut(df_10k2_generos_separados$Acousticness,
+                                                    breaks = c(0, 0.50, 1.00),
+                                                    labels = c("Acustica Baja", "Acustica Alta"))
+
+cat("Número de NA en danceability:", sum(is.na(df_10k2_generos_separados$Acousticness)), "\n")
+```
+
+graficos 
+
+```{r}
+ggplot(df_10k2_generos_separados) +
+  geom_boxplot(aes(x = nivel_energia, y = Popularity)) +
+  labs(title = "Distribución de Popularidad según qué tan bailable sea la canción", x = "Nivel de Energia", y = "Popularidad")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(x=nivel_energia, y=Popularity))+
+  facet_wrap(~Decada)+
+  labs(title = "Distrubucion de Popularidad segun que tan bailable sea la canción por decada", x= "Nivel de Energia", y= "Popularidad") 
+```
+
+
+```{r}
+
+ggplot(df_10k2_generos_separados) +
+  geom_boxplot(aes(x = nivel_bailabilidad, y = Popularity)) +
+  labs(title = "Distribución de Popularidad según qué tan bailable sea la canción", x = "Nivel de Bailabilidad", y = "Popularidad")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(x=nivel_bailabilidad, y=Popularity))+
+  facet_wrap(~Decada)+
+  labs(title = "Distrubucion de Popularidad segun que tan bailable sea la canción por decada", x= "Nivel de Bailabilidad", y= "Popularidad") 
+
+#ggplot(df_pop)+
+ # geom_boxplot(aes(x=nivel_bailabilidad, y=Popularity))
+```
+
+```{r}
+ggplot(df_10k2_generos_separados) +
+  geom_boxplot(aes(x = nivel_positividad, y = Popularity)) +
+  labs(title = "Distribución de Popularidad según qué tan positiva sea la canción", x = "Nivel de Bailabilidad", y = "Popularidad")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(x=nivel_positividad, y=Popularity, color=nivel_positividad))+
+  facet_wrap(~Decada)+
+  labs(title = "Distrubucion de Popularidad segun que tan positiva sea la canción por decada", x= "Nivel de Positividad", y= "Popularidad", color= "Positividad") 
+
+```
+
+```{r}
+ggplot(df_10k2_generos_separados) +
+  geom_boxplot(aes(x = acusticidad, y = Popularity)) +
+  labs(title = "Distribución de Popularidad según qué tan positiva sea la canción", x = "Nivel de Bailabilidad", y = "Popularidad")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(x=acusticidad, y=Popularity, color=acusticidad))+
+  facet_wrap(~Decada)+
+  labs(title = "Distrubucion de Popularidad segun que tan positiva sea la canción por decada", x= "Nivel de Acusticidad", y= "Popularidad", color= "Acusticidad") 
+```
+```{r}
+ggplot(df_10k2_generos_separados) +
+  geom_boxplot(aes(x = nivel_energia, y = Popularity)) +
+  labs(title = "Distribución de Popularidad según qué tan positiva sea la canción", x = "Nivel de Bailabilidad", y = "Popularidad")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(x=nivel_energia, y=Popularity, color=nivel_energia))+
+  facet_wrap(~Decada)+
+  labs(title = "Distrubucion de Popularidad segun que tan positiva sea la canción por decada", x= "Nivel de Energia", y= "Popularidad", color= "Energia") 
+```
+```{r}
+ggplot(df_10k2_generos_separados) +
+  geom_boxplot(aes(x = nivel_Loudness, y = Popularity)) +
+  labs(title = "Distribución de Popularidad según qué tan positiva sea la canción", x = "Nivel de Bailabilidad", y = "Popularidad")
+
+ggplot(df_10k2_generos_separados)+
+  geom_boxplot(aes(x=nivel_Loudness, y=Popularity, color=nivel_Loudness))+
+  facet_wrap(~Decada)+
+  labs(title = "Distrubucion de Popularidad segun que tan positiva sea la canción por decada", x= "Nivel de Ruido", y= "Popularidad", color= "Ruido") 
+```
+
+
+
+
+
+
+
+
+```{r}
+ggplot(df_10k2_generos_separados)+
+  geom_point(aes(x=Danceability, y=Popularity))+
+  labs(title = "Bailabilidad vs Popularidad",  
+       x = "Bailabilidad", y = "Popularidad")
+
+
+ggplot(df_10k2_generos_separados)+
+  geom_point(aes(x=Danceability, y=Popularity))+
+  facet_wrap(~Decada)+
+  labs(title = "Bailabilidad vs Popularidad por Decadas",  
+       x = "Bailabilidad", y = "Popularidad")
+```
+
+```{r}
+df_10k2_generos_separados_f <- df_10k2_generos_separados %>% 
+  filter(Genre %in% cinco_generos$Genre) #%>% filter(!(Decada %in% c('1950-1959', '1960-1969')))
+
+modagus<-lm(Popularity ~ Danceability+Energy+Valence+Acousticness+Loudness+Genre+Decada-1, 
+             df_10k2_generos_separados_f)
+summary(modagus)
+
+df_mod_agus <-  df_10k2_generos_separados_f %>% add_predictions(model=modagus)
+df_mod_agus <-  df_mod_agus %>% add_residuals(model=modagus)
+
+coefs <- coef(modagus)
+df_coefs <- data.frame(variable = names(coefs), coeficiente = coefs)
+
+df_coefs$variable[df_coefs$variable == 'GenreAfro-Funk'] <- 'Afro-Funk'
+df_coefs$variable[df_coefs$variable == 'GenreEMC'] <- 'EMC'
+df_coefs$variable[df_coefs$variable == 'GenreHip Hop'] <- 'Hip Hop'
+df_coefs$variable[df_coefs$variable == 'GenrePop'] <- 'Pop'
+df_coefs$variable[df_coefs$variable == 'GenreRock'] <- 'Rock'
+
+df_coefs$variable[df_coefs$variable == 'Decada1960-1969'] <- '60s'
+df_coefs$variable[df_coefs$variable == 'Decada1970-1979'] <- '70s'
+df_coefs$variable[df_coefs$variable == 'Decada1980-1989'] <- '80s'
+df_coefs$variable[df_coefs$variable == 'Decada1990-1999'] <- '90s'
+df_coefs$variable[df_coefs$variable == 'Decada2000-2009'] <- '2000s'
+df_coefs$variable[df_coefs$variable == 'Decada2010-2019'] <- '2010s'
+
+
+ggplot(df_coefs, aes(x=reorder(variable, -coeficiente), y=coeficiente, fill=variable))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size=12),
+        legend.position = 'none')+
+  geom_text(aes(label = round(coeficiente, 2)), vjust = ifelse(df_coefs$coeficiente >= 0, -0.5, 1.5), size = 3.5)+
+  xlab('Variable')+
+  ylab('Coeficiente')
+
+ggplot(df_mod_agus, aes(x = pred, y = resid, color=Decada)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red") + 
+  geom_smooth(color='black')+
+  facet_wrap(~Decada)+
+  xlab("Valor Predicho") +
+  ylab("Residuo")
+
+ggplot(df_mod_agus, aes(x = pred, y = resid, color=Genre)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red") + 
+  geom_smooth(color='black')+
+  facet_wrap(~Genre)+
+  xlab("Valor Predicho") +
+  ylab("Residuo")
+
+for(v in variables){
+  graf<-df_mod_agus %>%
+    ggplot(aes(x=!!as.symbol(v), y=Popularity))+
+    geom_point()+
+    geom_smooth(aes(y=pred))+
+    facet_wrap(~Decada)
+  
+  print(graf)
+}
+
+
+
+```
+
+
+```{r}
+
+modagus2<-lm(Popularity ~ nivel_bailabilidad+nivel_energia+nivel_positividad+nivel_Loudness
+             +acusticidad+Genre+Decada-1, df_10k2_generos_separados_f)
+summary(modagus2)
+#anova(modagus2, modagus)
+
+df_mod_agus2 <-  df_10k2_generos_separados_f %>% add_predictions(model=modagus2)
+df_mod_agus2 <-  df_mod_agus2 %>% add_residuals(model=modagus2)
+
+coefs <- coef(modagus2)
+df_coefs <- data.frame(variable = names(coefs), coeficiente = coefs)
+
+df_coefs$variable[df_coefs$variable == 'GenreAfro-Funk'] <- 'Afro-Funk'
+df_coefs$variable[df_coefs$variable == 'GenreEMC'] <- 'EMC'
+df_coefs$variable[df_coefs$variable == 'GenreHip Hop'] <- 'Hip Hop'
+df_coefs$variable[df_coefs$variable == 'GenrePop'] <- 'Pop'
+df_coefs$variable[df_coefs$variable == 'GenreRock'] <- 'Rock'
+
+df_coefs$variable[df_coefs$variable == 'Decada1960-1969'] <- '60s'
+df_coefs$variable[df_coefs$variable == 'Decada1970-1979'] <- '70s'
+df_coefs$variable[df_coefs$variable == 'Decada1980-1989'] <- '80s'
+df_coefs$variable[df_coefs$variable == 'Decada1990-1999'] <- '90s'
+df_coefs$variable[df_coefs$variable == 'Decada2000-2009'] <- '2000s'
+df_coefs$variable[df_coefs$variable == 'Decada2010-2019'] <- '2010s'
+
+df_coefs$variable[df_coefs$variable == 'nivel_bailabilidadPoco bailable'] <- 'Poco bailable'
+df_coefs$variable[df_coefs$variable == 'nivel_bailabilidadBailable'] <- 'Bailable'
+df_coefs$variable[df_coefs$variable == 'nivel_bailabilidadMuy bailable'] <- 'Muy bailable'
+df_coefs$variable[df_coefs$variable == 'nivel_energiaenergetica'] <- 'Energética'
+df_coefs$variable[df_coefs$variable == 'nivel_energiaMuy energetica'] <- 'Muy energética'
+df_coefs$variable[df_coefs$variable == 'nivel_positividadBailable'] <- 'Positiva'
+df_coefs$variable[df_coefs$variable == 'nivel_positividadMuy bailable'] <- 'Muy positiva'
+df_coefs$variable[df_coefs$variable == 'acusticidadAcustica Alta'] <- 'Muy acústica'
+df_coefs$variable[df_coefs$variable == 'nivel_LoudnessRuidosa'] <- 'Ruidosa'
+
+ggplot(df_coefs, aes(x=reorder(variable, -coeficiente), y=coeficiente, fill=variable))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size=12),
+        legend.position = 'none')+
+  geom_text(aes(label = round(coeficiente, 2)), vjust = ifelse(df_coefs$coeficiente >= 0, -0.5, 1.5), size = 3.5)+
+  xlab('Variable')+
+  ylab('Coeficiente')
+
+ggplot(df_mod_agus2, aes(x = pred, y = resid, color=Decada)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red") + 
+  geom_smooth(color='black')+
+  facet_wrap(~Decada)+
+  xlab("Valor Predicho") +
+  ylab("Residuo")
+
+ggplot(df_mod_agus2, aes(x = pred, y = resid, color=Genre)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red") + 
+  geom_smooth(color='black')+
+  facet_wrap(~Genre)+
+  xlab("Valor Predicho") +
+  ylab("Residuo")
+
+for(v in variables){
+  graf<-df_mod_agus2 %>%
+    ggplot(aes(x=!!as.symbol(v), y=Popularity))+
+    geom_point()+
+    geom_smooth(aes(y=pred))+
+    facet_wrap(~Decada)
+  
+  print(graf)
+}
+
+
+```
+
+
+```{r}
+modagus3<-lm(Popularity ~ (Danceability+Energy+Valence+Acousticness+Loudness)*Decada+Genre-1, 
+             df_10k2_generos_separados_f)
+summary(modagus3)
+anova(modagus3,modagus)
+
+df_mod_agus <-  df_10k2_generos_separados_f %>% add_predictions(model=modagus3)
+df_mod_agus <-  df_mod_agus %>% add_residuals(model=modagus3)
+
+coefs <- coef(modagus3)
+df_coefs <- data.frame(variable = names(coefs), coeficiente = coefs)
+
+df_coefs$variable[df_coefs$variable == 'GenreAfro-Funk'] <- 'Afro-Funk'
+df_coefs$variable[df_coefs$variable == 'GenreEMC'] <- 'EMC'
+df_coefs$variable[df_coefs$variable == 'GenreHip Hop'] <- 'Hip Hop'
+df_coefs$variable[df_coefs$variable == 'GenrePop'] <- 'Pop'
+df_coefs$variable[df_coefs$variable == 'GenreRock'] <- 'Rock'
+
+df_coefs$variable[df_coefs$variable == 'Decada1960-1969'] <- '60s'
+df_coefs$variable[df_coefs$variable == 'Decada1970-1979'] <- '70s'
+df_coefs$variable[df_coefs$variable == 'Decada1980-1989'] <- '80s'
+df_coefs$variable[df_coefs$variable == 'Decada1990-1999'] <- '90s'
+df_coefs$variable[df_coefs$variable == 'Decada2000-2009'] <- '2000s'
+df_coefs$variable[df_coefs$variable == 'Decada2010-2019'] <- '2010s'
+
+
+ggplot(df_coefs, aes(x=reorder(variable, -coeficiente), y=coeficiente, fill=variable))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size=12),
+        legend.position = 'none')+
+  geom_text(aes(label = round(coeficiente, 2)), vjust = ifelse(df_coefs$coeficiente >= 0, -0.5, 1.5), size = 3.5)+
+  xlab('Variable')+
+  ylab('Coeficiente')
+
+ggplot(df_mod_agus, aes(x = pred, y = resid, color=Decada)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red") + 
+  geom_smooth(color='black')+
+  facet_wrap(~Decada)+
+  xlab("Valor Predicho") +
+  ylab("Residuo")
+
+ggplot(df_mod_agus, aes(x = pred, y = resid, color=Genre)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red") + 
+  geom_smooth(color='black')+
+  facet_wrap(~Genre)+
+  xlab("Valor Predicho") +
+  ylab("Residuo")
+
+for(v in variables){
+  graf<-df_mod_agus %>%
+    ggplot(aes(x=!!as.symbol(v), y=Popularity))+
+    geom_point()+
+    geom_smooth(aes(y=pred))+
+    facet_wrap(~Decada)
+  
+  print(graf)
+}
+
+
+```
+
+```{r}
+# Crear el dataframe
+d <- data.frame(
+  variable = c(
+    "Danceability", "Energy", "Valence", "Acousticness", "Loudness",
+    "Decada1950-1959", "Decada1960-1969", "Decada1970-1979", "Decada1980-1989", "Decada1990-1999", "Decada2000-2009", "Decada2010-2019",
+    "GenreEMC", "GenreHip Hop", "GenrePop", "GenreRock",
+    "Danceability:Decada1960-1969", "Danceability:Decada1970-1979", "Danceability:Decada1980-1989", "Danceability:Decada1990-1999", "Danceability:Decada2000-2009", "Danceability:Decada2010-2019",
+    "Energy:Decada1960-1969", "Energy:Decada1970-1979", "Energy:Decada1980-1989", "Energy:Decada1990-1999", "Energy:Decada2000-2009", "Energy:Decada2010-2019",
+    "Valence:Decada1960-1969", "Valence:Decada1970-1979", "Valence:Decada1980-1989", "Valence:Decada1990-1999", "Valence:Decada2000-2009", "Valence:Decada2010-2019",
+    "Acousticness:Decada1960-1969", "Acousticness:Decada1970-1979", "Acousticness:Decada1980-1989", "Acousticness:Decada1990-1999", "Acousticness:Decada2000-2009", "Acousticness:Decada2010-2019",
+    "Loudness:Decada1960-1969", "Loudness:Decada1970-1979", "Loudness:Decada1980-1989", "Loudness:Decada1990-1999", "Loudness:Decada2000-2009", "Loudness:Decada2010-2019"
+  ),
+  coeficiente = c(
+    7.09315344, -69.58866705, 66.12909782, -26.88223148, 2.21267158,
+    80.63675963, 26.11261650, 60.98706587, 75.47813388, 69.13005085, 61.00050546, 56.21436444,
+    0.92135183, 3.23811468, 1.62480389, 0.16636108,
+    13.30534837, 3.41501884, 0.02672352, 5.30832698, 8.67138445, 21.51960489,
+    80.19602204, 64.37179969, 50.68456687, 61.47326163, 57.90270818, 61.94926784,
+    -72.86861992, -70.45976327, -67.91389778, -77.32839447, -68.07157243, -81.09158529,
+    30.63331627, 25.66589323, 23.13926615, 12.74865154, 18.31858259, 20.89492417,
+    -3.45960437, -1.74152606, -1.16320080, -1.02813358, -0.46947202, -1.00525505
+  )
+)
+
+d1<-d %>% filter(str_detect(variable, ':'))
+
+df_ajustado <- d1 %>%
+  separate(col = "variable", into = c("Variable", "Decada")) %>%
+  mutate(Decada = gsub("Decada", "", Decada)) %>%
+  spread(key = "Decada", value = "coeficiente")
+
+# Renombrar las columnas para tener un nombre más amigable
+colnames(df_ajustado) <- c("Variable", "Coeficiente_1960_1969", "Coeficiente_1970_1979", "Coeficiente_1980_1989", "Coeficiente_1990_1999", "Coeficiente_2000_2009", "Coeficiente_2010_2019")
+
+
+
+```
+
+
+
+
+
