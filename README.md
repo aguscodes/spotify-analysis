@@ -1,18 +1,13 @@
-# Proyecto 1: ¿Qué características hacen popular a una canción?
+## Análisis de popularisdad de canciones
 
-## 📌 Descripción
-En este proyecto analizamos con mis compañeros de la materia Introducción a Ciencia de Datos qué factores influyen en la popularidad de las canciones usando un dataset de Kaggle con información sobre características musicales como popularidad, energía y valencia.
+Este proyecto lo desarrollé con mis compañeros de la materia Introducción a Ciencia de Datos, hicimos un analisis de la distribución de ciertas características musicales y como estas influyen en la popularidad de las canciones. Usamos un dataset en kaggle usando un dataset de Kaggle con información sobre características musicales como popularidad, energía y valencia. - https://www.kaggle.com/datasets/joebeachcapital/top-10000-spotify-songs-1960-now/data
 
-## 🔍 Objetivo
-Analizar qué variables tienen mayor impacto en la popularidad de una canción y cómo han cambiado a lo largo del tiempo, si es que las hay.
-
-## 📊 Dataset
-- **Fuente:** Kaggle
-- **Variables clave:**
+## Objetivo
+Nuesro objetivo fue tratar de encontrar alguna relación entre las variables y la popularidad de las canciones, si su distribución cambiaba a lo largo de las décadas. Usamos R  como herramienta, pricipalmente la libreria tidyr
     - Target: Popularidad.
     - Categóricas:"album name", "artist genre" y "album release date"
     - Numéricas: "Instrumentalness", "Loudness", "Popularity", "valence", "danceability", "energy", "track duration"
-## 🛠️ Metodología
+    
 1. **Limpieza y tratamiento de datos:**
   - Descartamos categorías con alta cantidad de valores faltables
   - modificamos la categoría "género" para que cada género sea una categoría
@@ -20,18 +15,10 @@ Analizar qué variables tienen mayor impacto en la popularidad de una canción y
   - descartamos las canciones con popularidad "0"
   - clasificamos las características musicales en 3 categorías en base a su distribución
 3. **Análisis exploratorio:** No identificamos ningún tipo de patrón en relación a ningún género o carácteristica. Era distinto en cada una de ellas
-4. **Modelo predictivo:** Implementación de regresión lineal simple para evaluar la relación entre variables y popularidad.
+4. **Modelo predictivo:** Implementamos regresión lineal simple para evaluar la relación entre variables y popularidad.
 
-## 🔎 Principales hallazgos
+## Conclusiones finales
 - Las canciones tristes y bailables son las que mantienen más popularidad a través de las décadas.
 - No hubo una única variable dominante, por lo que se consideraron todas en el análisis.
 - Se observó un cambio en las tendencias musicales en cuanto a géneros a lo largo de los años.
-
-## 🛠️ Tecnologías utilizadas
-- R (tidyr,
-
-## 📂 Archivos
-- `presentacion final.Rmd`: Código del análisis.
-- https://www.kaggle.com/datasets/joebeachcapital/top-10000-spotify-songs-1960-now/data
-- `spoti_pptx`: Resumen visual del análisis.
 
